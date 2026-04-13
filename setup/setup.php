@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // =========================
-// STEP 1: FORM SUBMIT
+// FORM HANDLER
 // =========================
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
@@ -19,17 +19,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 }
 
 // =========================
-// STEP 2: RUN INSTALL
+// RUN INSTALL
 // =========================
 if (isset($_GET['run'])) {
 
     echo "<h2>Running Installation...</h2><pre>";
 
     $startTime = microtime(true);
-    $startDate = date("Y-m-d H:i:s");
 
     // =========================
-    // CONNECT (NO DB LOCK ISSUES FIX)
+    // DB CONNECT (NO DB LOCK ISSUE)
     // =========================
     try {
         $pdo = new PDO(
@@ -39,27 +38,33 @@ if (isset($_GET['run'])) {
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
 
-        // Create DB if not exists
         $dbName = $_SESSION['db_name'];
+
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`");
         $pdo->exec("USE `$dbName`");
     } catch (Exception $e) {
         die("DB Connection failed: " . $e->getMessage());
     }
 
-    echo "Start: $startDate\n\n";
-
     // =========================
-    // CREATE AUDIT TABLE
+    // CREATE LOG TABLE
     // =========================
     $pdo->exec("
-        CREATE TABLE IF NOT EXISTS install_audit_log (
+        CREATE TABLE IF NOT EXISTS install_log (
             id INT AUTO_INCREMENT PRIMARY KEY,
+
             action_type VARCHAR(50),
+            table_name VARCHAR(255),
+
             status VARCHAR(20),
             message TEXT,
             query_text LONGTEXT,
-            executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+            utc_time DATETIME,
+            local_time DATETIME,
+            timezone VARCHAR(100),
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ");
 
@@ -94,7 +99,7 @@ if (isset($_GET['run'])) {
 
         $sql = file_get_contents($file);
 
-        // remove /* comments */
+        // remove broken comments
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
         $queries = parseSQL($sql);
@@ -104,21 +109,38 @@ if (isset($_GET['run'])) {
             $query = trim($query);
             if ($query === '') continue;
 
-            $time = date("Y-m-d H:i:s");
             $type = getActionType($query);
+            $table = getTableName($query);
+            $time = getTimeData();
 
             try {
+
+                // INSERT lifecycle tracking
+                if ($type === 'INSERT') {
+                    logAudit($pdo, "INSERT_START", $table, "Insert started", $query);
+                }
+
                 $pdo->exec($query);
 
-                logAudit($pdo, $type, "SUCCESS", "Executed successfully", $query);
+                // TABLE EVENT LOGS
+                if ($type === 'CREATE_TABLE') {
+                    logAudit($pdo, $type, $table, "Table created", $query);
+                } elseif ($type === 'TRUNCATE') {
+                    logAudit($pdo, $type, $table, "Table truncated", $query);
+                } elseif ($type === 'INSERT') {
+                    logAudit($pdo, "INSERT_END", $table, "Insert finished", $query);
+                } else {
+                    logAudit($pdo, $type, $table, "Executed", $query);
+                }
 
-                echo "[$time] $type → SUCCESS ✓\n";
+                echo "[{$time['local']}] $type → SUCCESS ✓ ($table)\n";
+
                 $success++;
             } catch (Exception $e) {
 
-                logAudit($pdo, $type, "FAILED", $e->getMessage(), $query);
+                logAudit($pdo, $type, $table, $e->getMessage(), $query);
 
-                echo "[$time] $type → FAILED ❌\n";
+                echo "[{$time['local']}] $type → FAILED ❌ ($table)\n";
                 echo $e->getMessage() . "\n\n";
 
                 $failed++;
@@ -132,12 +154,8 @@ if (isset($_GET['run'])) {
     $afterSize = getDbSize($pdo, $dbName);
     $tablesAfter = count($pdo->query("SHOW TABLES")->fetchAll());
 
-    $endTime = microtime(true);
-    $duration = round($endTime - $startTime, 2);
+    $duration = round(microtime(true) - $startTime, 2);
 
-    // =========================
-    // FINAL REPORT
-    // =========================
     echo "\n========================\n";
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
@@ -151,7 +169,6 @@ if (isset($_GET['run'])) {
     echo "Tables AFTER : $tablesAfter\n\n";
 
     echo "Duration: {$duration}s\n";
-    echo "End: " . date("Y-m-d H:i:s") . "\n";
     echo "========================\n";
 
     exit;
@@ -176,21 +193,58 @@ function getActionType($sql)
 }
 
 // =========================
-// AUDIT LOG
+// TABLE NAME DETECTOR
 // =========================
-function logAudit($pdo, $type, $status, $message, $query)
+function getTableName($sql)
 {
+    if (preg_match('/CREATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    if (preg_match('/DROP TABLE.*`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    if (preg_match('/TRUNCATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    if (preg_match('/INSERT INTO `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    return null;
+}
+
+// =========================
+// TIME DATA (UTC + LOCAL)
+// =========================
+function getTimeData()
+{
+    $tz = date_default_timezone_get();
+
+    $dt = new DateTime("now", new DateTimeZone($tz));
+
+    return [
+        'utc' => gmdate("Y-m-d H:i:s"),
+        'local' => $dt->format("Y-m-d H:i:s"),
+        'timezone' => $tz
+    ];
+}
+
+// =========================
+// AUDIT LOGGER
+// =========================
+function logAudit($pdo, $type, $table, $message, $query)
+{
+    $time = getTimeData();
+
     $stmt = $pdo->prepare("
-        INSERT INTO install_audit_log
-        (action_type, status, message, query_text, executed_at)
-        VALUES (:type, :status, :message, :query, NOW())
+        INSERT INTO install_log
+        (action_type, table_name, status, message, query_text,
+         utc_time, local_time, timezone)
+        VALUES
+        (:type, :table, :status, :message, :query,
+         :utc, :local, :tz)
     ");
 
     $stmt->execute([
         ':type' => $type,
-        ':status' => $status,
+        ':table' => $table,
+        ':status' => strpos($type, 'FAILED') !== false ? 'FAILED' : 'SUCCESS',
         ':message' => $message,
-        ':query' => $query
+        ':query' => $query,
+        ':utc' => $time['utc'],
+        ':local' => $time['local'],
+        ':tz' => $time['timezone']
     ]);
 }
 
@@ -264,10 +318,10 @@ function parseSQL($sql)
     <h2>Database Setup</h2>
 
     <form method="POST">
-        <input name="db_host" placeholder="DB Host" required><br><br>
+        <input name="db_host" placeholder="Host" required><br><br>
         <input name="db_name" placeholder="DB Name" required><br><br>
-        <input name="db_user" placeholder="DB User" required><br><br>
-        <input name="db_pass" placeholder="DB Password" type="password"><br><br>
+        <input name="db_user" placeholder="User" required><br><br>
+        <input name="db_pass" placeholder="Password" type="password"><br><br>
         <button>Run Install</button>
     </form>
 
