@@ -2,8 +2,8 @@
 class User
 {
     private $pdo;
-    private $activityTable = 'fleetcentra_useractivityaudit';
-    private $userTable = 'fleetcentra_users';
+    private $activityTable = 'zentra_useractivityaudit';
+    private $userTable = 'zentra_users';
 
     public function __construct(PDO $pdo)
     {
@@ -154,7 +154,7 @@ class User
     {
         // 1. Find the reset request record (token must be valid and not expired and not already used)
         $stmt = $this->pdo->prepare("
-            SELECT id, user_id FROM fleetcentra_password_resets 
+            SELECT id, user_id FROM zentra_password_resets 
             WHERE reset_token = :token AND expires_at > NOW() AND status = 'active'
             LIMIT 1
         ");
@@ -174,12 +174,12 @@ class User
         }
 
         // 3. Update the user's password in the users table
-        $updateUser = $this->pdo->prepare("UPDATE fleetcentra_users SET pwd = :pwd WHERE id = :id");
+        $updateUser = $this->pdo->prepare("UPDATE zentra_users SET pwd = :pwd WHERE id = :id");
         $success = $updateUser->execute(['pwd' => $hashed, 'id' => $userId]);
 
         if ($success) {
             // 4. Mark the reset request as 'used' (or whatever status you want)
-            $updateReset = $this->pdo->prepare("UPDATE fleetcentra_password_resets SET status = 'used', used_at = NOW() WHERE id = :id");
+            $updateReset = $this->pdo->prepare("UPDATE zentra_password_resets SET status = 'used', used_at = NOW() WHERE id = :id");
             $updateReset->execute(['id' => $resetId]);
 
             // 5. Log the password reset activity

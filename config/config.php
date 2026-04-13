@@ -9,7 +9,7 @@ ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
 // Set custom log file in the current directory
-ini_set('error_log', __DIR__ . '/FleetCentra_App_Error_log');
+ini_set('error_log', __DIR__ . '/Zentra_App_Error_log');
 
 // Optionally set error reporting level (log everything)
 error_reporting(E_ALL);
@@ -32,9 +32,9 @@ define('SUPPORT_EMAIL', 'support@app.livewd.ca');
 
 // Base Domain URL - strict validation domain
 $allowed_domains = [
-    'app.fleetcentra.com',
-    'www.app.fleetcentra.com',
-    'fleetcentra.azurewebsites.net',
+    'app.zentra.com',
+    'www.app.zentra.com',
+    'zentra.azurewebsites.net',
 ];
 
 $current_domain = $_SERVER['HTTP_HOST'] ?? '';
@@ -191,7 +191,7 @@ function generatePassword(int $length = 20, string $complexity = 'strong', strin
 
 function logAppError($exception)
 {
-    $logFile = __DIR__ . '/FleetCentra_App_Error_log';
+    $logFile = __DIR__ . '/Zentra_App_Error_log';
     $errorMessage = "[" . date('Y-m-d H:i:s') . "] " . $exception->getMessage() . "\n";
     file_put_contents($logFile, $errorMessage, FILE_APPEND);
 }

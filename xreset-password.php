@@ -54,11 +54,11 @@ if (!$token) {
 } else {
     // Look up token and associated user
     // Assumptions:
-    // - fleetcentra_password_resets: id, user_id, reset_token, expires_at, used_at
-    // - fleetcentra_users: id, user_email, banned, approved, email_verify, termination_date, termination_reason
+    // - zentra_password_resets: id, user_id, reset_token, expires_at, used_at
+    // - zentra_users: id, user_email, banned, approved, email_verify, termination_date, termination_reason
     $stmt = $pdo->prepare(" SELECT pr.id, pr.user_id, pr.expires_at, pr.used_at, u.user_email, u.banned, 
-    u.approved, u.email_verify, u.termination_date, u.termination_reason FROM fleetcentra_password_resets pr 
-    JOIN fleetcentra_users u ON u.id = pr.user_id WHERE pr.reset_token = :token LIMIT 1");
+    u.approved, u.email_verify, u.termination_date, u.termination_reason FROM zentra_password_resets pr 
+    JOIN zentra_users u ON u.id = pr.user_id WHERE pr.reset_token = :token LIMIT 1");
     $stmt->execute(['token' => $token]);
     $reset = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && !empty($reset)) {
         $hashed = password_hash($password, PASSWORD_DEFAULT);
 
         // Update user password
-        $update = $pdo->prepare("UPDATE fleetcentra_users SET pwd = :pwd WHERE id = :uid");
+        $update = $pdo->prepare("UPDATE zentra_users SET pwd = :pwd WHERE id = :uid");
         $update->execute([
             'pwd' => $hashed,
             'uid' => $reset['user_id']
@@ -193,14 +193,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && !empty($reset)) {
 
         // Mark token as used (prevents replay attacks)
         $markUsed = $pdo->prepare("
-            UPDATE fleetcentra_password_resets
+            UPDATE zentra_password_resets
             SET used_at = NOW()
             WHERE id = :id
         ");
         $markUsed->execute(['id' => $reset['id']]);
 
         // Optional: delete all other tokens for this user to reduce attack surface
-        $deleteOthers = $pdo->prepare("DELETE FROM fleetcentra_password_resets WHERE user_id = :uid AND id <> :id");
+        $deleteOthers = $pdo->prepare("DELETE FROM zentra_password_resets WHERE user_id = :uid AND id <> :id");
         $deleteOthers->execute([
             'uid' => $reset['user_id'],
             'id'  => $reset['id']

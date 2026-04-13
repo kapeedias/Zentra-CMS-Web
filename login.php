@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // === DATABASE AUTH ===
         if (empty($errors)) {
             try {
-                $stmt = $pdo->prepare("SELECT id, first_name, pwd, approved, banned FROM fleetcentra_users WHERE user_email = :email LIMIT 1");
+                $stmt = $pdo->prepare("SELECT id, first_name, pwd, approved, banned FROM zentra_users WHERE user_email = :email LIMIT 1");
                 $stmt->execute(['email' => $email]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -181,8 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <title><?= getenv('APP_NAME') ?> - Login</title>
-    <link rel="canonical" href="https://app.fleetcentra.com/login.php">
-    <meta property="og:url" content="https://app.fleetcentra.com/login.php">
+    <link rel="canonical" href="https://app.zentra.com/login.php">
+    <meta property="og:url" content="https://app.zentra.com/login.php">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Atkinson+Hyperlegible&amp;display=swap">
     <link rel="stylesheet" href="assets/css/bss-overrides.css?h=b18bb4213f988d736c15b5952f0e61c3">

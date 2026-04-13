@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // === EMAIL UNIQUENESS CHECK ===
     if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM fleetcentra_users WHERE user_email = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM zentra_users WHERE user_email = ?");
         $stmt->execute([$email]);
         if ($stmt->fetchColumn() > 0) {
             $errors[] = "The email address '{$email}' is already registered.";

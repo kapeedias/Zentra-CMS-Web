@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             // Check if user exists and is approved & not banned
-            $stmt = $pdo->prepare("SELECT id, first_name, user_email, approved, banned FROM fleetcentra_users WHERE user_email = :email LIMIT 1");
+            $stmt = $pdo->prepare("SELECT id, first_name, user_email, approved, banned FROM zentra_users WHERE user_email = :email LIMIT 1");
             $stmt->execute(['email' => $email]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $expires = date('Y-m-d H:i:s', time() + 3600);
 
                 // Store token and expiry in your password resets table
-                $insert = $pdo->prepare("INSERT INTO fleetcentra_password_resets (user_id, reset_token, expires_at) VALUES (:uid, :token, :expires)");
+                $insert = $pdo->prepare("INSERT INTO zentra_password_resets (user_id, reset_token, expires_at) VALUES (:uid, :token, :expires)");
                 $insert->execute([
                     'uid' => $user['id'],
                     'token' => $token,

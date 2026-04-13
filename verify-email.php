@@ -13,7 +13,7 @@ if (!isset($_GET['code']) || empty($_GET['code'])) {
 
     try {
         $pdo = Database::getInstance();
-        $stmt = $pdo->prepare("SELECT * FROM fleetcentra_users WHERE activation_code = :code LIMIT 1");
+        $stmt = $pdo->prepare("SELECT * FROM zentra_users WHERE activation_code = :code LIMIT 1");
         $stmt->execute(['code' => $code]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -24,7 +24,7 @@ if (!isset($_GET['code']) || empty($_GET['code'])) {
             $status = 'info';
         } else {
             // Update user to mark as approved
-            $update = $pdo->prepare("UPDATE fleetcentra_users SET approved = 1, email_verify = 'VERIFIED', activation_code = NULL WHERE id = :id");
+            $update = $pdo->prepare("UPDATE zentra_users SET approved = 1, email_verify = 'VERIFIED', activation_code = NULL WHERE id = :id");
             $update->execute(['id' => $user['id']]);
             $success[] = 'Your email has been successfully verified! You can now log in.';
             $status = 'success';

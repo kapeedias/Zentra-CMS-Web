@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             // Check if user exists and is approved & not banned
-            $stmt = $pdo->prepare("SELECT id, first_name, user_email, approved, banned FROM fleetcentra_users WHERE user_email = :email LIMIT 1");
+            $stmt = $pdo->prepare("SELECT id, first_name, user_email, approved, banned FROM zentra_users WHERE user_email = :email LIMIT 1");
             $stmt->execute(['email' => $email]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $expires = date('Y-m-d H:i:s', time() + 3600);
 
                 // Store token and expiry in your password resets table
-                $insert = $pdo->prepare("INSERT INTO fleetcentra_password_resets (user_id, reset_token, expires_at) VALUES (:uid, :token, :expires)");
+                $insert = $pdo->prepare("INSERT INTO zentra_password_resets (user_id, reset_token, expires_at) VALUES (:uid, :token, :expires)");
                 $insert->execute([
                     'uid' => $user['id'],
                     'token' => $token,
@@ -148,14 +148,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <title><?= APP_NAME ?> - Login</title>
-    <link rel="canonical" href="https://app.fleetcentra.com/forgot.php">
-    <meta property="og:url" content="https://app.fleetcentra.com/forgot.php">
+    <link rel="canonical" href="https://app.zentra.com/forgot.php">
+    <meta property="og:url" content="https://app.zentra.com/forgot.php">
     <script type="application/ld+json">
         {
             "@context": "http://schema.org",
             "@type": "WebSite",
-            "name": "FleetCentra",
-            "url": "https://app.fleetcentra.com"
+            "name": "Zentra",
+            "url": "https://app.zentra.com"
         }
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">

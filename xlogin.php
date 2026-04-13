@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // === DATABASE AUTH ===
         if (empty($errors)) {
             try {
-                $stmt = $pdo->prepare("SELECT id, first_name, pwd, approved, banned FROM fleetcentra_users WHERE user_email = :email LIMIT 1");
+                $stmt = $pdo->prepare("SELECT id, first_name, pwd, approved, banned FROM zentra_users WHERE user_email = :email LIMIT 1");
                 $stmt->execute(['email' => $email]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 

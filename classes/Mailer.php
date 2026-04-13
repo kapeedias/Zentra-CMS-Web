@@ -11,8 +11,8 @@ class Mailer
     {
         $this->apiUrl    = getenv('SMTP2GO_API_URL') ?: 'https://api.smtp2go.com/v3/email/send';
         $this->apiKey    = getenv('SMTP2GO_API_KEY') ?: '';
-        $this->fromEmail = getenv('SMTP2GO_FROM_EMAIL') ?: 'no-reply@fleetcentra.com';
-        $this->fromName  = getenv('SMTP2GO_FROM_NAME') ?: 'FleetCentra';
+        $this->fromEmail = getenv('SMTP2GO_FROM_EMAIL') ?: 'no-reply@zentra.com';
+        $this->fromName  = getenv('SMTP2GO_FROM_NAME') ?: 'Zentra';
 
         if ($this->apiKey === '') {
             error_log("MAILER ERROR: Missing SMTP2GO_API_KEY");
@@ -70,10 +70,10 @@ class Mailer
 
     public function sendResetPasswordEmail(string $toEmail, string $toName, string $resetToken, ?int $userId = null): bool
     {
-        $baseUrl   = rtrim(getenv('APP_BASE_URL') ?: 'https://app.fleetcentra.com', '/');
+        $baseUrl   = rtrim(getenv('APP_BASE_URL') ?: 'https://app.zentra.com', '/');
         $resetLink = $baseUrl . '/reset-password.php?token=' . urlencode($resetToken);
 
-        $subject = "FleetCentra - Password Reset Request";
+        $subject = "Zentra - Password Reset Request";
 
         $html = "
             <h3>Hello " . htmlspecialchars($toName) . ",</h3>
@@ -94,13 +94,13 @@ class Mailer
 
     public function sendWelcomeAndVerificationEmail(string $toEmail, string $toName, string $activationCode, ?int $userId = null): bool
     {
-        $baseUrl   = rtrim(getenv('APP_BASE_URL') ?: 'https://app.fleetcentra.com', '/');
+        $baseUrl   = rtrim(getenv('APP_BASE_URL') ?: 'https://app.zentra.com', '/');
         $verifyLink = $baseUrl . '/verify-email.php?code=' . urlencode($activationCode);
 
-        $subject = "Welcome to FleetCentra! Please Confirm Your Email";
+        $subject = "Welcome to Zentra! Please Confirm Your Email";
 
         $html = "
-            <h2>Welcome to FleetCentra, " . htmlspecialchars($toName) . "!</h2>
+            <h2>Welcome to Zentra, " . htmlspecialchars($toName) . "!</h2>
             <p>Please verify your email by clicking the link below:</p>
             <p><a href='{$verifyLink}' style='background:#0066cc;color:#fff;padding:10px 15px;border-radius:5px;text-decoration:none;'>Verify My Email</a></p>
             <p>If you didn't create this account, you can ignore this message.</p>
