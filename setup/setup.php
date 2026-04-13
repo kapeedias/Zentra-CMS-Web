@@ -28,7 +28,7 @@ if (isset($_GET['run'])) {
     $startTime = microtime(true);
 
     // =========================
-    // CONNECT (CREATE DB FIRST)
+    // CONNECT
     // =========================
     try {
         $pdo = new PDO(
@@ -49,7 +49,7 @@ if (isset($_GET['run'])) {
     echo "DB Connected ✓\n\n";
 
     // =========================
-    // CREATE INSTALL LOG TABLE (FIXED)
+    // CREATE AUDIT TABLE
     // =========================
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS install_log (
@@ -64,7 +64,6 @@ if (isset($_GET['run'])) {
 
             utc_time DATETIME,
             local_time DATETIME,
-
             `timezone` VARCHAR(100),
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -102,10 +101,11 @@ if (isset($_GET['run'])) {
 
         $sql = file_get_contents($file);
 
-        // remove block comments safely
+        // remove block comments
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
-        $queries = parseSQL($sql);
+        // CRITICAL FIX: SAFE SPLIT ENGINE
+        $queries = splitSQLSafe($sql);
 
         foreach ($queries as $query) {
 
@@ -118,14 +118,14 @@ if (isset($_GET['run'])) {
 
             try {
 
-                // INSERT tracking start
+                // INSERT tracking
                 if ($type === 'INSERT') {
                     logAudit($pdo, "INSERT_START", $table, "Insert started", $query);
                 }
 
                 $pdo->exec($query);
 
-                // ACTION LOGS
+                // TABLE EVENTS
                 if ($type === 'CREATE_TABLE') {
                     logAudit($pdo, $type, $table, "Table created", $query);
                 } elseif ($type === 'TRUNCATE') {
@@ -141,7 +141,7 @@ if (isset($_GET['run'])) {
                 $success++;
             } catch (Exception $e) {
 
-                logAudit($pdo, $type, $table, $e->getMessage(), $query);
+                logAudit($pdo, $type, $table, "FAILED: " . $e->getMessage(), $query);
 
                 echo "[{$time['local']}] $type → FAILED ❌ ($table)\n";
                 echo $e->getMessage() . "\n\n";
@@ -159,9 +159,6 @@ if (isset($_GET['run'])) {
 
     $duration = round(microtime(true) - $startTime, 2);
 
-    // =========================
-    // SUMMARY
-    // =========================
     echo "\n========================\n";
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
@@ -181,9 +178,51 @@ if (isset($_GET['run'])) {
     exit;
 }
 
-// =========================
-// ACTION TYPE DETECTOR
-// =========================
+# =========================
+# 🔥 BULLETPROOF SQL SPLITTER
+# =========================
+function splitSQLSafe($sql)
+{
+    $statements = [];
+    $buffer = '';
+    $inString = false;
+    $stringChar = '';
+
+    $len = strlen($sql);
+
+    for ($i = 0; $i < $len; $i++) {
+
+        $char = $sql[$i];
+
+        // handle string start/end
+        if (($char === "'" || $char === '"') && ($i === 0 || $sql[$i - 1] !== '\\')) {
+            if ($inString === false) {
+                $inString = true;
+                $stringChar = $char;
+            } elseif ($stringChar === $char) {
+                $inString = false;
+            }
+        }
+
+        // split only if NOT inside string
+        if ($char === ';' && !$inString) {
+            $statements[] = trim($buffer);
+            $buffer = '';
+        } else {
+            $buffer .= $char;
+        }
+    }
+
+    if (trim($buffer) !== '') {
+        $statements[] = trim($buffer);
+    }
+
+    return $statements;
+}
+
+# =========================
+# ACTION DETECTOR
+# =========================
 function getActionType($sql)
 {
     $sql = strtoupper(trim($sql));
@@ -199,9 +238,9 @@ function getActionType($sql)
     return 'OTHER';
 }
 
-// =========================
-// TABLE NAME DETECTOR
-// =========================
+# =========================
+# TABLE NAME DETECTOR
+# =========================
 function getTableName($sql)
 {
     if (preg_match('/CREATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
@@ -211,9 +250,9 @@ function getTableName($sql)
     return null;
 }
 
-// =========================
-// TIME (UTC + LOCAL + TZ)
-// =========================
+# =========================
+# TIME (UTC + LOCAL + TZ)
+# =========================
 function getTimeData()
 {
     $tz = date_default_timezone_get();
@@ -226,9 +265,9 @@ function getTimeData()
     ];
 }
 
-// =========================
-// AUDIT LOGGER
-// =========================
+# =========================
+# AUDIT LOG
+# =========================
 function logAudit($pdo, $type, $table, $message, $query)
 {
     $time = getTimeData();
@@ -245,7 +284,7 @@ function logAudit($pdo, $type, $table, $message, $query)
     $stmt->execute([
         ':type' => $type,
         ':table' => $table,
-        ':status' => (strpos($type, 'FAILED') !== false) ? 'FAILED' : 'SUCCESS',
+        ':status' => 'SUCCESS',
         ':message' => $message,
         ':query' => $query,
         ':utc' => $time['utc'],
@@ -254,9 +293,9 @@ function logAudit($pdo, $type, $table, $message, $query)
     ]);
 }
 
-// =========================
-// DB SIZE
-// =========================
+# =========================
+# DB SIZE
+# =========================
 function getDbSize($pdo, $dbName)
 {
     $stmt = $pdo->query("
@@ -269,47 +308,9 @@ function getDbSize($pdo, $dbName)
 
     return round($row['size_mb'] ?? 0, 2);
 }
-
-// =========================
-// SQL PARSER (DELIMITER SAFE)
-// =========================
-function parseSQL($sql)
-{
-    $lines = explode("\n", $sql);
-
-    $delimiter = ';';
-    $buffer = '';
-    $queries = [];
-
-    foreach ($lines as $line) {
-
-        $trim = trim($line);
-
-        if (preg_match('/^DELIMITER\s+(.+)$/i', $trim, $m)) {
-            $delimiter = $m[1];
-            continue;
-        }
-
-        $buffer .= $line . "\n";
-
-        if (substr(trim($buffer), -strlen($delimiter)) === $delimiter) {
-
-            $query = trim(substr(trim($buffer), 0, -strlen($delimiter)));
-
-            $queries[] = $query;
-            $buffer = '';
-        }
-    }
-
-    if (trim($buffer) !== '') {
-        $queries[] = trim($buffer);
-    }
-
-    return $queries;
-}
 ?>
 
-<!-- SIMPLE UI -->
+<!-- UI -->
 <!DOCTYPE html>
 <html>
 
@@ -323,7 +324,7 @@ function parseSQL($sql)
 
     <form method="POST">
         <input name="db_host" placeholder="Host" required><br><br>
-        <input name="db_name" placeholder="Database Name" required><br><br>
+        <input name="db_name" placeholder="Database" required><br><br>
         <input name="db_user" placeholder="User" required><br><br>
         <input name="db_pass" placeholder="Password" type="password"><br><br>
         <button>Install</button>
