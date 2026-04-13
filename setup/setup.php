@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // =========================
-// HANDLE FORM
+// FORM
 // =========================
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
@@ -19,7 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 }
 
 // =========================
-// RUN INSTALLER
+// RUN INSTALL
 // =========================
 if (isset($_GET['run'])) {
 
@@ -27,9 +27,6 @@ if (isset($_GET['run'])) {
 
     $startTime = microtime(true);
 
-    // =========================
-    // CONNECT DB (NO DB SELECT YET)
-    // =========================
     try {
         $pdo = new PDO(
             "mysql:host={$_SESSION['db_host']};charset=utf8mb4",
@@ -42,7 +39,6 @@ if (isset($_GET['run'])) {
 
         echo "DB Connected ✓\n";
 
-        // Create DB if not exists
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`");
         $pdo->exec("USE `$dbName`");
     } catch (Exception $e) {
@@ -50,7 +46,7 @@ if (isset($_GET['run'])) {
     }
 
     // =========================
-    // DB STATS BEFORE
+    // STATS BEFORE
     // =========================
     $beforeSize = getDbSize($pdo, $dbName);
     $tablesBefore = count($pdo->query("SHOW TABLES")->fetchAll());
@@ -59,7 +55,7 @@ if (isset($_GET['run'])) {
     echo "Tables BEFORE: $tablesBefore\n\n";
 
     // =========================
-    // LOAD SQL FILES
+    // FILES
     // =========================
     $files = glob(__DIR__ . "/*.sql");
 
@@ -67,11 +63,11 @@ if (isset($_GET['run'])) {
         die("No SQL files found.");
     }
 
-    $successFiles = 0;
-    $failedFiles = 0;
+    $totalSuccess = 0;
+    $totalFailed = 0;
 
     // =========================
-    // EXECUTE EACH FILE
+    // PROCESS FILES
     // =========================
     foreach ($files as $file) {
 
@@ -81,42 +77,55 @@ if (isset($_GET['run'])) {
 
         $sql = file_get_contents($file);
 
-        // remove block comments safely
+        // remove block comments
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
-        try {
+        $queries = splitSQL($sql);
 
-            // 🔥 SAFE FULL EXECUTION (NO SPLITTING)
-            $pdo->exec($sql);
+        foreach ($queries as $query) {
 
-            echo "FILE EXECUTED SUCCESSFULLY ✓\n";
-            $successFiles++;
-        } catch (Exception $e) {
+            $query = trim($query);
+            if ($query === '') continue;
 
-            echo "FILE FAILED ❌\n";
-            echo $e->getMessage() . "\n\n";
+            $type = detectType($query);
+            $table = detectTable($query);
+            $time = getTime();
 
-            $failedFiles++;
+            echo "[{$time['local']}] $type";
+
+            if ($table) echo " → $table";
+
+            try {
+
+                $pdo->exec($query);
+
+                echo " → SUCCESS ✓\n";
+
+                $totalSuccess++;
+            } catch (Exception $e) {
+
+                echo " → FAILED ❌\n";
+                echo "   " . $e->getMessage() . "\n";
+
+                $totalFailed++;
+            }
         }
     }
 
     // =========================
-    // DB STATS AFTER
+    // FINAL STATS
     // =========================
     $afterSize = getDbSize($pdo, $dbName);
     $tablesAfter = count($pdo->query("SHOW TABLES")->fetchAll());
 
     $duration = round(microtime(true) - $startTime, 2);
 
-    // =========================
-    // SUMMARY
-    // =========================
     echo "\n========================\n";
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
 
-    echo "Files Success: $successFiles\n";
-    echo "Files Failed : $failedFiles\n\n";
+    echo "Success Queries: $totalSuccess\n";
+    echo "Failed Queries : $totalFailed\n\n";
 
     echo "DB Size BEFORE: {$beforeSize} MB\n";
     echo "DB Size AFTER : {$afterSize} MB\n\n";
@@ -131,12 +140,98 @@ if (isset($_GET['run'])) {
 }
 
 // =========================
-// DB SIZE FUNCTION
+// SAFE SQL SPLITTER (FIXED)
+// =========================
+function splitSQL($sql)
+{
+    $statements = [];
+    $buffer = '';
+    $inString = false;
+    $quote = '';
+
+    $len = strlen($sql);
+
+    for ($i = 0; $i < $len; $i++) {
+
+        $char = $sql[$i];
+
+        if (($char === "'" || $char === '"') && ($i === 0 || $sql[$i - 1] !== '\\')) {
+            if (!$inString) {
+                $inString = true;
+                $quote = $char;
+            } elseif ($quote === $char) {
+                $inString = false;
+            }
+        }
+
+        if ($char === ';' && !$inString) {
+            $statements[] = $buffer;
+            $buffer = '';
+        } else {
+            $buffer .= $char;
+        }
+    }
+
+    if (trim($buffer) !== '') {
+        $statements[] = $buffer;
+    }
+
+    return $statements;
+}
+
+// =========================
+// TYPE DETECTOR
+// =========================
+function detectType($sql)
+{
+    $sql = strtoupper(trim($sql));
+
+    if (str_starts_with($sql, 'DROP TABLE')) return 'DROP_TABLE';
+    if (str_starts_with($sql, 'CREATE TABLE')) return 'CREATE_TABLE';
+    if (str_starts_with($sql, 'TRUNCATE')) return 'TRUNCATE';
+    if (str_starts_with($sql, 'INSERT')) return 'INSERT';
+    if (str_starts_with($sql, 'UPDATE')) return 'UPDATE';
+    if (str_starts_with($sql, 'DELETE')) return 'DELETE';
+    if (str_starts_with($sql, 'ALTER')) return 'ALTER';
+
+    return 'OTHER';
+}
+
+// =========================
+// TABLE DETECTOR
+// =========================
+function detectTable($sql)
+{
+    if (preg_match('/CREATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    if (preg_match('/DROP TABLE.*`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    if (preg_match('/TRUNCATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    if (preg_match('/INSERT INTO `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+
+    return null;
+}
+
+// =========================
+// TIME
+// =========================
+function getTime()
+{
+    $tz = date_default_timezone_get();
+    $dt = new DateTime("now", new DateTimeZone($tz));
+
+    return [
+        'utc' => gmdate("Y-m-d H:i:s"),
+        'local' => $dt->format("Y-m-d H:i:s"),
+        'tz' => $tz
+    ];
+}
+
+// =========================
+// DB SIZE
 // =========================
 function getDbSize($pdo, $dbName)
 {
     $stmt = $pdo->query("
-        SELECT SUM(data_length + index_length) / 1024 / 1024 AS size_mb
+        SELECT SUM(data_length + index_length)/1024/1024 AS size_mb
         FROM information_schema.tables
         WHERE table_schema = '$dbName'
     ");
@@ -147,9 +242,7 @@ function getDbSize($pdo, $dbName)
 }
 ?>
 
-<!-- =========================
-     SIMPLE UI
-========================= -->
+<!-- UI -->
 <!DOCTYPE html>
 <html>
 
@@ -162,11 +255,11 @@ function getDbSize($pdo, $dbName)
     <h2>Database Setup</h2>
 
     <form method="POST">
-        <input name="db_host" placeholder="Database Host" required><br><br>
-        <input name="db_name" placeholder="Database Name" required><br><br>
-        <input name="db_user" placeholder="Username" required><br><br>
+        <input name="db_host" placeholder="Host" required><br><br>
+        <input name="db_name" placeholder="DB Name" required><br><br>
+        <input name="db_user" placeholder="User" required><br><br>
         <input name="db_pass" placeholder="Password" type="password"><br><br>
-        <button>Run Installation</button>
+        <button>Install</button>
     </form>
 
 </body>
