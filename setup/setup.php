@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // =========================
-// FORM HANDLER
+// FORM SUBMIT
 // =========================
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
@@ -19,7 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 }
 
 // =========================
-// RUN INSTALL
+// RUN INSTALLER
 // =========================
 if (isset($_GET['run'])) {
 
@@ -28,7 +28,7 @@ if (isset($_GET['run'])) {
     $startTime = microtime(true);
 
     // =========================
-    // DB CONNECT (NO DB LOCK ISSUE)
+    // CONNECT (CREATE DB FIRST)
     // =========================
     try {
         $pdo = new PDO(
@@ -46,8 +46,10 @@ if (isset($_GET['run'])) {
         die("DB Connection failed: " . $e->getMessage());
     }
 
+    echo "DB Connected ✓\n\n";
+
     // =========================
-    // CREATE LOG TABLE
+    // CREATE INSTALL LOG TABLE (FIXED)
     // =========================
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS install_log (
@@ -62,7 +64,8 @@ if (isset($_GET['run'])) {
 
             utc_time DATETIME,
             local_time DATETIME,
-            timezone VARCHAR(100),
+
+            `timezone` VARCHAR(100),
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -78,7 +81,7 @@ if (isset($_GET['run'])) {
     echo "Tables BEFORE: $tablesBefore\n\n";
 
     // =========================
-    // FILES
+    // LOAD SQL FILES
     // =========================
     $files = glob(__DIR__ . "/*.sql");
 
@@ -99,7 +102,7 @@ if (isset($_GET['run'])) {
 
         $sql = file_get_contents($file);
 
-        // remove broken comments
+        // remove block comments safely
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
         $queries = parseSQL($sql);
@@ -115,14 +118,14 @@ if (isset($_GET['run'])) {
 
             try {
 
-                // INSERT lifecycle tracking
+                // INSERT tracking start
                 if ($type === 'INSERT') {
                     logAudit($pdo, "INSERT_START", $table, "Insert started", $query);
                 }
 
                 $pdo->exec($query);
 
-                // TABLE EVENT LOGS
+                // ACTION LOGS
                 if ($type === 'CREATE_TABLE') {
                     logAudit($pdo, $type, $table, "Table created", $query);
                 } elseif ($type === 'TRUNCATE') {
@@ -156,9 +159,13 @@ if (isset($_GET['run'])) {
 
     $duration = round(microtime(true) - $startTime, 2);
 
+    // =========================
+    // SUMMARY
+    // =========================
     echo "\n========================\n";
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
+
     echo "Success: $success\n";
     echo "Failed: $failed\n\n";
 
@@ -205,12 +212,11 @@ function getTableName($sql)
 }
 
 // =========================
-// TIME DATA (UTC + LOCAL)
+// TIME (UTC + LOCAL + TZ)
 // =========================
 function getTimeData()
 {
     $tz = date_default_timezone_get();
-
     $dt = new DateTime("now", new DateTimeZone($tz));
 
     return [
@@ -230,7 +236,7 @@ function logAudit($pdo, $type, $table, $message, $query)
     $stmt = $pdo->prepare("
         INSERT INTO install_log
         (action_type, table_name, status, message, query_text,
-         utc_time, local_time, timezone)
+         utc_time, local_time, `timezone`)
         VALUES
         (:type, :table, :status, :message, :query,
          :utc, :local, :tz)
@@ -239,7 +245,7 @@ function logAudit($pdo, $type, $table, $message, $query)
     $stmt->execute([
         ':type' => $type,
         ':table' => $table,
-        ':status' => strpos($type, 'FAILED') !== false ? 'FAILED' : 'SUCCESS',
+        ':status' => (strpos($type, 'FAILED') !== false) ? 'FAILED' : 'SUCCESS',
         ':message' => $message,
         ':query' => $query,
         ':utc' => $time['utc'],
@@ -303,14 +309,12 @@ function parseSQL($sql)
 }
 ?>
 
-<!-- =========================
-     UI
-========================= -->
+<!-- SIMPLE UI -->
 <!DOCTYPE html>
 <html>
 
 <head>
-    <title>Setup Installer</title>
+    <title>Installer</title>
 </head>
 
 <body>
@@ -319,10 +323,10 @@ function parseSQL($sql)
 
     <form method="POST">
         <input name="db_host" placeholder="Host" required><br><br>
-        <input name="db_name" placeholder="DB Name" required><br><br>
+        <input name="db_name" placeholder="Database Name" required><br><br>
         <input name="db_user" placeholder="User" required><br><br>
         <input name="db_pass" placeholder="Password" type="password"><br><br>
-        <button>Run Install</button>
+        <button>Install</button>
     </form>
 
 </body>
