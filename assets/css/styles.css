@@ -1,0 +1,121 @@
+.main-login {
+  min-height: 100vh;
+}
+
+.login-form-holder {
+  width: 95%;
+  background-color: #ffffff;
+  border-radius: 0.5em;
+  padding: 2em 2em 1em 2em;
+  -webkit-box-shadow: 6px 5px 24px 4px rgba(0,0,0,0.31);
+  box-shadow: 6px 5px 24px 4px rgba(0,0,0,0.31);
+  max-width: 500px;
+  align-self: center !important;
+  margin: 0 auto;  
+}
+
+@media (max-width: 992px) {
+  .login-col:nth-child(2) {
+    display: none !important;
+  }
+}
+
+.main-login .btn {
+  width: 100%;
+}
+
+.login-form-links {
+  color: var(--bs-secondary);
+  text-align: center;
+  margin-top: 1em;
+  font-size: small;
+}
+
+.login-col {
+  height: 100vh;
+   display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    /*padding: 20px;*/
+}
+
+.login-holder-main-div {
+  height: 100%;
+  padding: 2em 0em;
+  margin: 0px;
+  max-width: px;
+  justify-self: center;
+  justify-items: center;
+  align-content: start;
+}
+
+.login-alert-window {
+  width: 95%;
+  padding: 10px;
+  max-width: 365px;
+  border-radius: .25em;
+  display: flex;
+  justify-self: center;
+  align-items: center;
+  margin: 10px auto;
+}
+
+.login-alert-window p {
+  padding: 0px;
+  margin: 0px;
+}
+
+.login-alert-window.error {
+  background-color: #f8c4c9;
+  font-family: 'Atkinson Hyperlegible';
+  color: #7b0000;
+  border: 1px solid #f58f8f;
+  font-size: small;
+}
+
+.login-alert-window.success {
+  background-color: #cbfbcd;
+  font-family: 'Atkinson Hyperlegible';
+  color: var(--bs-success);
+  border: 1px solid var(--bs-success);
+  font-size: small;
+
+}
+
+.list-inline-item:not(:last-child) {
+  margin-right: 1rem;
+  margin-left: 0;
+}
+
+.login-col:nth-child(2) {
+  padding-left: 5em;
+  background: url("../../assets/img/login-bg.jpg?h=f3b2b7b6430949d3d27650035bd32fe5") center / cover no-repeat;
+}
+
+.login-promo {
+  padding: 1em;
+  max-width: 700px;
+}
+
+.login-form-links-footer {
+    font-size: smaller;
+    color: var(--bs-secondary);
+    width: 95%;
+    padding: 2em 0em;
+    max-width: 500px;
+    margin: 0 auto;
+    justify-content: center;
+}
+
+li:not(:last-child)::after {
+  content: "|";
+  margin-left: 1em;
+  color: #bebebe;
+  font-weight: 800;
+}
+
+  .brand-loginpage {
+    padding-top: 1em;
+    padding-bottom: 1em;
+  }
+
