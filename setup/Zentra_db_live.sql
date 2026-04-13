@@ -1,22 +1,6 @@
 CREATE DATABASE IF NOT EXISTS `zentra_db_live` DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 USE `zentra_db_live`;
 
-/*
-DROP TABLE IF EXISTS `zentra_admin_settings`;
-CREATE TABLE IF NOT EXISTS `zentra_admin_settings` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `entity_name` VARCHAR(100) NOT NULL,
-  `entity_icon` VARCHAR(225) NOT NULL,
-  `entity_landing_page` VARCHAR(500) NOT NULL,
-  `data_type` VARCHAR(225) DEFAULT 'input',
-  `access` INT UNSIGNED NOT NULL DEFAULT 1,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `entity_name_UNIQUE` (`entity_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-TRUNCATE TABLE `zentra_admin_settings`;
-*/
-
 
 DROP TABLE IF EXISTS `zentra_users`;
 CREATE TABLE IF NOT EXISTS `zentra_users`(
