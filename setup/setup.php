@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // =========================
-// FORM SUBMIT
+// HANDLE FORM
 // =========================
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
@@ -27,14 +27,15 @@ if (isset($_GET['run'])) {
 
     $startTime = microtime(true);
 
+    // =========================
+    // CONNECT DB (NO DB SELECT YET)
+    // =========================
     try {
         $pdo = new PDO(
             "mysql:host={$_SESSION['db_host']};charset=utf8mb4",
             $_SESSION['db_user'],
             $_SESSION['db_pass'],
-            [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-            ]
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
 
         $dbName = $_SESSION['db_name'];
@@ -49,24 +50,6 @@ if (isset($_GET['run'])) {
     }
 
     // =========================
-    // CREATE LOG TABLE (SAFE)
-    // =========================
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS install_log (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            action_type VARCHAR(50),
-            table_name VARCHAR(255),
-            status VARCHAR(20),
-            message TEXT,
-            query_text LONGTEXT,
-            utc_time DATETIME,
-            local_time DATETIME,
-            `timezone` VARCHAR(100),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-
-    // =========================
     // DB STATS BEFORE
     // =========================
     $beforeSize = getDbSize($pdo, $dbName);
@@ -76,7 +59,7 @@ if (isset($_GET['run'])) {
     echo "Tables BEFORE: $tablesBefore\n\n";
 
     // =========================
-    // SQL FILES
+    // LOAD SQL FILES
     // =========================
     $files = glob(__DIR__ . "/*.sql");
 
@@ -84,9 +67,12 @@ if (isset($_GET['run'])) {
         die("No SQL files found.");
     }
 
-    $success = 0;
-    $failed = 0;
+    $successFiles = 0;
+    $failedFiles = 0;
 
+    // =========================
+    // EXECUTE EACH FILE
+    // =========================
     foreach ($files as $file) {
 
         echo "========================\n";
@@ -98,18 +84,19 @@ if (isset($_GET['run'])) {
         // remove block comments safely
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
-        // 🔥 CRITICAL FIX: USE MYSQL MULTI QUERY (NO SPLITTING)
         try {
 
-            if ($pdo->exec($sql) !== false) {
-                echo "FILE EXECUTED SUCCESSFULLY ✓\n";
-                $success++;
-            }
+            // 🔥 SAFE FULL EXECUTION (NO SPLITTING)
+            $pdo->exec($sql);
+
+            echo "FILE EXECUTED SUCCESSFULLY ✓\n";
+            $successFiles++;
         } catch (Exception $e) {
 
             echo "FILE FAILED ❌\n";
             echo $e->getMessage() . "\n\n";
-            $failed++;
+
+            $failedFiles++;
         }
     }
 
@@ -121,12 +108,15 @@ if (isset($_GET['run'])) {
 
     $duration = round(microtime(true) - $startTime, 2);
 
+    // =========================
+    // SUMMARY
+    // =========================
     echo "\n========================\n";
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
 
-    echo "Success Files: $success\n";
-    echo "Failed Files: $failed\n\n";
+    echo "Files Success: $successFiles\n";
+    echo "Files Failed : $failedFiles\n\n";
 
     echo "DB Size BEFORE: {$beforeSize} MB\n";
     echo "DB Size AFTER : {$afterSize} MB\n\n";
@@ -172,11 +162,11 @@ function getDbSize($pdo, $dbName)
     <h2>Database Setup</h2>
 
     <form method="POST">
-        <input name="db_host" placeholder="Host" required><br><br>
+        <input name="db_host" placeholder="Database Host" required><br><br>
         <input name="db_name" placeholder="Database Name" required><br><br>
-        <input name="db_user" placeholder="User" required><br><br>
+        <input name="db_user" placeholder="Username" required><br><br>
         <input name="db_pass" placeholder="Password" type="password"><br><br>
-        <button>Install</button>
+        <button>Run Installation</button>
     </form>
 
 </body>

@@ -1,6 +1,24 @@
 CREATE DATABASE IF NOT EXISTS `zentra_db_live` DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 USE `zentra_db_live`;
 
+DROP TABLE IF EXISTS `install_log`;
+CREATE TABLE IF NOT EXISTS `install_log` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `action_type` VARCHAR(50) DEFAULT NULL,
+    `table_name` VARCHAR(255) DEFAULT NULL,
+    `status` VARCHAR(20) DEFAULT NULL,
+    `message` TEXT DEFAULT NULL,
+    `query_text` LONGTEXT DEFAULT NULL,
+    `utc_time` DATETIME DEFAULT NULL,
+    `local_time` DATETIME DEFAULT NULL,
+    `timezone` VARCHAR(100) DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_action_type` (`action_type`),
+    INDEX `idx_table_name` (`table_name`),
+    INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 DROP TABLE IF EXISTS `zentra_users`;
 CREATE TABLE IF NOT EXISTS `zentra_users`(
