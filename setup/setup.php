@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // =========================
-// FORM
+// FORM HANDLER
 // =========================
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
@@ -19,7 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 }
 
 // =========================
-// RUN INSTALL
+// RUN INSTALLER
 // =========================
 if (isset($_GET['run'])) {
 
@@ -41,12 +41,15 @@ if (isset($_GET['run'])) {
 
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`");
         $pdo->exec("USE `$dbName`");
+
+        // 🔥 IMPORTANT: disable FK checks during install
+        $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
     } catch (Exception $e) {
         die("DB Connection failed: " . $e->getMessage());
     }
 
     // =========================
-    // STATS BEFORE
+    // DB STATS BEFORE
     // =========================
     $beforeSize = getDbSize($pdo, $dbName);
     $tablesBefore = count($pdo->query("SHOW TABLES")->fetchAll());
@@ -55,7 +58,7 @@ if (isset($_GET['run'])) {
     echo "Tables BEFORE: $tablesBefore\n\n";
 
     // =========================
-    // FILES
+    // LOAD SQL FILES
     // =========================
     $files = glob(__DIR__ . "/*.sql");
 
@@ -63,8 +66,8 @@ if (isset($_GET['run'])) {
         die("No SQL files found.");
     }
 
-    $totalSuccess = 0;
-    $totalFailed = 0;
+    $success = 0;
+    $failed = 0;
 
     // =========================
     // PROCESS FILES
@@ -77,9 +80,10 @@ if (isset($_GET['run'])) {
 
         $sql = file_get_contents($file);
 
-        // remove block comments
+        // remove comments safely
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
+        // split safely (handles multi-statements)
         $queries = splitSQL($sql);
 
         foreach ($queries as $query) {
@@ -93,7 +97,9 @@ if (isset($_GET['run'])) {
 
             echo "[{$time['local']}] $type";
 
-            if ($table) echo " → $table";
+            if ($table) {
+                echo " → $table";
+            }
 
             try {
 
@@ -101,19 +107,22 @@ if (isset($_GET['run'])) {
 
                 echo " → SUCCESS ✓\n";
 
-                $totalSuccess++;
+                $success++;
             } catch (Exception $e) {
 
                 echo " → FAILED ❌\n";
                 echo "   " . $e->getMessage() . "\n";
 
-                $totalFailed++;
+                $failed++;
             }
         }
     }
 
+    // re-enable FK checks
+    $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+
     // =========================
-    // FINAL STATS
+    // DB STATS AFTER
     // =========================
     $afterSize = getDbSize($pdo, $dbName);
     $tablesAfter = count($pdo->query("SHOW TABLES")->fetchAll());
@@ -124,8 +133,8 @@ if (isset($_GET['run'])) {
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
 
-    echo "Success Queries: $totalSuccess\n";
-    echo "Failed Queries : $totalFailed\n\n";
+    echo "Success Queries: $success\n";
+    echo "Failed Queries : $failed\n\n";
 
     echo "DB Size BEFORE: {$beforeSize} MB\n";
     echo "DB Size AFTER : {$afterSize} MB\n\n";
@@ -140,7 +149,7 @@ if (isset($_GET['run'])) {
 }
 
 // =========================
-// SAFE SQL SPLITTER (FIXED)
+// SAFE SQL SPLITTER
 // =========================
 function splitSQL($sql)
 {
@@ -180,32 +189,53 @@ function splitSQL($sql)
 }
 
 // =========================
-// TYPE DETECTOR
+// TYPE DETECTOR (SAFE)
 // =========================
 function detectType($sql)
 {
     $sql = strtoupper(trim($sql));
 
-    if (str_starts_with($sql, 'DROP TABLE')) return 'DROP_TABLE';
-    if (str_starts_with($sql, 'CREATE TABLE')) return 'CREATE_TABLE';
-    if (str_starts_with($sql, 'TRUNCATE')) return 'TRUNCATE';
-    if (str_starts_with($sql, 'INSERT')) return 'INSERT';
-    if (str_starts_with($sql, 'UPDATE')) return 'UPDATE';
-    if (str_starts_with($sql, 'DELETE')) return 'DELETE';
-    if (str_starts_with($sql, 'ALTER')) return 'ALTER';
+    if (strpos($sql, 'DROP TABLE') === 0) return 'DROP_TABLE';
+    if (strpos($sql, 'CREATE TABLE') === 0) return 'CREATE_TABLE';
+    if (strpos($sql, 'TRUNCATE') === 0) return 'TRUNCATE';
+    if (strpos($sql, 'INSERT') === 0) return 'INSERT';
+    if (strpos($sql, 'UPDATE') === 0) return 'UPDATE';
+    if (strpos($sql, 'DELETE') === 0) return 'DELETE';
+    if (strpos($sql, 'ALTER') === 0) return 'ALTER';
 
     return 'OTHER';
 }
 
 // =========================
-// TABLE DETECTOR
+// TABLE DETECTOR (FIXED - NO GARBAGE LIKE "g")
 // =========================
 function detectTable($sql)
 {
-    if (preg_match('/CREATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    if (preg_match('/DROP TABLE.*`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    if (preg_match('/TRUNCATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    if (preg_match('/INSERT INTO `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
+    $sql = trim($sql);
+
+    if (preg_match('/DROP TABLE (IF EXISTS )?`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) {
+        return $m[2];
+    }
+
+    if (preg_match('/CREATE TABLE (IF NOT EXISTS )?`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) {
+        return $m[2];
+    }
+
+    if (preg_match('/TRUNCATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) {
+        return $m[1];
+    }
+
+    if (preg_match('/INSERT INTO `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) {
+        return $m[1];
+    }
+
+    if (preg_match('/UPDATE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) {
+        return $m[1];
+    }
+
+    if (preg_match('/DELETE FROM `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) {
+        return $m[1];
+    }
 
     return null;
 }
@@ -242,7 +272,9 @@ function getDbSize($pdo, $dbName)
 }
 ?>
 
-<!-- UI -->
+<!-- =========================
+     UI
+========================= -->
 <!DOCTYPE html>
 <html>
 
