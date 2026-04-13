@@ -27,45 +27,41 @@ if (isset($_GET['run'])) {
 
     $startTime = microtime(true);
 
-    // =========================
-    // CONNECT
-    // =========================
     try {
         $pdo = new PDO(
             "mysql:host={$_SESSION['db_host']};charset=utf8mb4",
             $_SESSION['db_user'],
             $_SESSION['db_pass'],
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]
         );
 
         $dbName = $_SESSION['db_name'];
 
+        echo "DB Connected ✓\n";
+
+        // Create DB if not exists
         $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`");
         $pdo->exec("USE `$dbName`");
     } catch (Exception $e) {
         die("DB Connection failed: " . $e->getMessage());
     }
 
-    echo "DB Connected ✓\n\n";
-
     // =========================
-    // CREATE AUDIT TABLE
+    // CREATE LOG TABLE (SAFE)
     // =========================
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS install_log (
             id INT AUTO_INCREMENT PRIMARY KEY,
-
             action_type VARCHAR(50),
             table_name VARCHAR(255),
-
             status VARCHAR(20),
             message TEXT,
             query_text LONGTEXT,
-
             utc_time DATETIME,
             local_time DATETIME,
             `timezone` VARCHAR(100),
-
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ");
@@ -80,7 +76,7 @@ if (isset($_GET['run'])) {
     echo "Tables BEFORE: $tablesBefore\n\n";
 
     // =========================
-    // LOAD SQL FILES
+    // SQL FILES
     // =========================
     $files = glob(__DIR__ . "/*.sql");
 
@@ -91,63 +87,29 @@ if (isset($_GET['run'])) {
     $success = 0;
     $failed = 0;
 
-    // =========================
-    // PROCESS FILES
-    // =========================
     foreach ($files as $file) {
 
+        echo "========================\n";
         echo "FILE: " . basename($file) . "\n";
-        echo "-------------------------\n";
+        echo "========================\n";
 
         $sql = file_get_contents($file);
 
-        // remove block comments
+        // remove block comments safely
         $sql = preg_replace('!/\*.*?\*/!s', '', $sql);
 
-        // CRITICAL FIX: SAFE SPLIT ENGINE
-        $queries = splitSQLSafe($sql);
+        // 🔥 CRITICAL FIX: USE MYSQL MULTI QUERY (NO SPLITTING)
+        try {
 
-        foreach ($queries as $query) {
-
-            $query = trim($query);
-            if ($query === '') continue;
-
-            $type = getActionType($query);
-            $table = getTableName($query);
-            $time = getTimeData();
-
-            try {
-
-                // INSERT tracking
-                if ($type === 'INSERT') {
-                    logAudit($pdo, "INSERT_START", $table, "Insert started", $query);
-                }
-
-                $pdo->exec($query);
-
-                // TABLE EVENTS
-                if ($type === 'CREATE_TABLE') {
-                    logAudit($pdo, $type, $table, "Table created", $query);
-                } elseif ($type === 'TRUNCATE') {
-                    logAudit($pdo, $type, $table, "Table truncated", $query);
-                } elseif ($type === 'INSERT') {
-                    logAudit($pdo, "INSERT_END", $table, "Insert finished", $query);
-                } else {
-                    logAudit($pdo, $type, $table, "Executed", $query);
-                }
-
-                echo "[{$time['local']}] $type → SUCCESS ✓ ($table)\n";
-
+            if ($pdo->exec($sql) !== false) {
+                echo "FILE EXECUTED SUCCESSFULLY ✓\n";
                 $success++;
-            } catch (Exception $e) {
-
-                logAudit($pdo, $type, $table, "FAILED: " . $e->getMessage(), $query);
-
-                echo "[{$time['local']}] $type → FAILED ❌ ($table)\n";
-                echo $e->getMessage() . "\n\n";
-
-                $failed++;
             }
+        } catch (Exception $e) {
+
+            echo "FILE FAILED ❌\n";
+            echo $e->getMessage() . "\n\n";
+            $failed++;
         }
     }
 
@@ -163,8 +125,8 @@ if (isset($_GET['run'])) {
     echo "INSTALL SUMMARY\n";
     echo "========================\n";
 
-    echo "Success: $success\n";
-    echo "Failed: $failed\n\n";
+    echo "Success Files: $success\n";
+    echo "Failed Files: $failed\n\n";
 
     echo "DB Size BEFORE: {$beforeSize} MB\n";
     echo "DB Size AFTER : {$afterSize} MB\n\n";
@@ -178,124 +140,9 @@ if (isset($_GET['run'])) {
     exit;
 }
 
-# =========================
-# 🔥 BULLETPROOF SQL SPLITTER
-# =========================
-function splitSQLSafe($sql)
-{
-    $statements = [];
-    $buffer = '';
-    $inString = false;
-    $stringChar = '';
-
-    $len = strlen($sql);
-
-    for ($i = 0; $i < $len; $i++) {
-
-        $char = $sql[$i];
-
-        // handle string start/end
-        if (($char === "'" || $char === '"') && ($i === 0 || $sql[$i - 1] !== '\\')) {
-            if ($inString === false) {
-                $inString = true;
-                $stringChar = $char;
-            } elseif ($stringChar === $char) {
-                $inString = false;
-            }
-        }
-
-        // split only if NOT inside string
-        if ($char === ';' && !$inString) {
-            $statements[] = trim($buffer);
-            $buffer = '';
-        } else {
-            $buffer .= $char;
-        }
-    }
-
-    if (trim($buffer) !== '') {
-        $statements[] = trim($buffer);
-    }
-
-    return $statements;
-}
-
-# =========================
-# ACTION DETECTOR
-# =========================
-function getActionType($sql)
-{
-    $sql = strtoupper(trim($sql));
-
-    if (str_starts_with($sql, 'DROP TABLE')) return 'DROP_TABLE';
-    if (str_starts_with($sql, 'CREATE TABLE')) return 'CREATE_TABLE';
-    if (str_starts_with($sql, 'TRUNCATE')) return 'TRUNCATE';
-    if (str_starts_with($sql, 'INSERT')) return 'INSERT';
-    if (str_starts_with($sql, 'UPDATE')) return 'UPDATE';
-    if (str_starts_with($sql, 'DELETE')) return 'DELETE';
-    if (str_starts_with($sql, 'ALTER')) return 'ALTER';
-
-    return 'OTHER';
-}
-
-# =========================
-# TABLE NAME DETECTOR
-# =========================
-function getTableName($sql)
-{
-    if (preg_match('/CREATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    if (preg_match('/DROP TABLE.*`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    if (preg_match('/TRUNCATE TABLE `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    if (preg_match('/INSERT INTO `?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return $m[1];
-    return null;
-}
-
-# =========================
-# TIME (UTC + LOCAL + TZ)
-# =========================
-function getTimeData()
-{
-    $tz = date_default_timezone_get();
-    $dt = new DateTime("now", new DateTimeZone($tz));
-
-    return [
-        'utc' => gmdate("Y-m-d H:i:s"),
-        'local' => $dt->format("Y-m-d H:i:s"),
-        'timezone' => $tz
-    ];
-}
-
-# =========================
-# AUDIT LOG
-# =========================
-function logAudit($pdo, $type, $table, $message, $query)
-{
-    $time = getTimeData();
-
-    $stmt = $pdo->prepare("
-        INSERT INTO install_log
-        (action_type, table_name, status, message, query_text,
-         utc_time, local_time, `timezone`)
-        VALUES
-        (:type, :table, :status, :message, :query,
-         :utc, :local, :tz)
-    ");
-
-    $stmt->execute([
-        ':type' => $type,
-        ':table' => $table,
-        ':status' => 'SUCCESS',
-        ':message' => $message,
-        ':query' => $query,
-        ':utc' => $time['utc'],
-        ':local' => $time['local'],
-        ':tz' => $time['timezone']
-    ]);
-}
-
-# =========================
-# DB SIZE
-# =========================
+// =========================
+// DB SIZE FUNCTION
+// =========================
 function getDbSize($pdo, $dbName)
 {
     $stmt = $pdo->query("
@@ -310,12 +157,14 @@ function getDbSize($pdo, $dbName)
 }
 ?>
 
-<!-- UI -->
+<!-- =========================
+     SIMPLE UI
+========================= -->
 <!DOCTYPE html>
 <html>
 
 <head>
-    <title>Installer</title>
+    <title>Setup Installer</title>
 </head>
 
 <body>
@@ -324,7 +173,7 @@ function getDbSize($pdo, $dbName)
 
     <form method="POST">
         <input name="db_host" placeholder="Host" required><br><br>
-        <input name="db_name" placeholder="Database" required><br><br>
+        <input name="db_name" placeholder="Database Name" required><br><br>
         <input name="db_user" placeholder="User" required><br><br>
         <input name="db_pass" placeholder="Password" type="password"><br><br>
         <button>Install</button>
