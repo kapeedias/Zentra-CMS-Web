@@ -689,3 +689,40 @@ CREATE TABLE IF NOT EXISTS `zentra_config` (
 TRUNCATE TABLE `zentra_config`;
 
 INSERT INTO `zentra_config` (`id`, `tenant_id_counter`) VALUES (1, 90000) ON DUPLICATE KEY UPDATE `tenant_id_counter` = `tenant_id_counter`;
+
+DROP TABLE IF EXISTS `zentra_schedule_seasons`;
+CREATE TABLE `zentra_schedule_seasons` (
+    season_id INT AUTO_INCREMENT PRIMARY KEY,
+    season_name VARCHAR(50) NOT NULL,   -- Summer, Winter, Spring, etc.
+    start_date DATE NULL,               -- optional (if seasons are date-based)
+    end_date DATE NULL,                 -- optional
+    is_active TINYINT(1) DEFAULT 1,     -- enable/disable season
+    created_on DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_on DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+TRUNCATE TABLE `zentra_schedule_seasons`;
+
+DROP TABLE IF EXISTS `zentra_business_schedules`;
+CREATE TABLE `zentra_business_schedules` (
+    schedule_id INT AUTO_INCREMENT PRIMARY KEY,
+    season_id INT NOT NULL,
+    day_of_week ENUM('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday') NOT NULL,
+    open_time TIME NOT NULL,
+    close_time TIME NOT NULL,
+    created_on DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_on DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (season_id) REFERENCES zentra_schedule_seasons(season_id)
+);
+TRUNCATE TABLE `zentra_business_schedules`;
+
+DROP TABLE IF EXISTS `zentra_business_special_schedules`;
+CREATE TABLE `zentra_business_special_schedules` (
+    special_id INT AUTO_INCREMENT PRIMARY KEY,
+    schedule_date DATE NOT NULL,
+    open_time TIME NOT NULL,
+    close_time TIME NOT NULL,
+    description VARCHAR(255) NULL,   -- e.g., "Diwali Special Hours"
+    created_on DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+TRUNCATE TABLE `zentra_business_special_schedules`;
