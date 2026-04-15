@@ -12,6 +12,7 @@
 //    optionally delete other tokens, and log everything for SOC2.
 // -----------------------------------------------------------------------------
 require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/init.php';
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/helpers.php';
 require_once __DIR__ . '/classes/User.php';
@@ -322,8 +323,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid && !empty($reset)) {
                     </div>
                     <div class="d-flex login-form-links-footer">
                         <ul class="list-inline">
-                            <li class="list-inline-item" data-aos="fade-left" data-aos-duration="200" data-aos-delay="800"><a href="#">Policy</a></li>
-                            <li class="list-inline-item" data-aos="fade-left" data-aos-duration="200" data-aos-delay="800"><a href="#">Terms of Service</a></li>
+                            <li class="list-inline-item" data-aos="fade-left" data-aos-duration="200"
+                                data-aos-delay="800"><a href="#">Policy</a></li>
+                            <li class="list-inline-item" data-aos="fade-left" data-aos-duration="200"
+                                data-aos-delay="800"><a href="#">Terms of Service</a></li>
                         </ul>
                     </div>
                 </div>

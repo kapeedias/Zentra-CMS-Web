@@ -1,6 +1,8 @@
 <?php
 // ==== CONFIG & DEPENDENCIES ====
+
 require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/init.php';
 require_once __DIR__ . '/classes/Mailer.php';
 
 $mailer = new Mailer();
@@ -11,5 +13,3 @@ if ($sent) {
 } else {
     echo "Failed to send reset link.";
 }
-  
-?>
