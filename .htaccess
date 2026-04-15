@@ -1,4 +1,12 @@
 # -------------------------------------------------------------------
+# 0. DATABASE ENVIRONMENT VARIABLES (GoDaddy)
+# -------------------------------------------------------------------
+SetEnv DB_HOST localhost
+SetEnv DB_NAME your_database_name
+SetEnv DB_USER your_database_user
+SetEnv DB_PASS your_database_password
+
+# -------------------------------------------------------------------
 # SECURITY & CLEAN URL CONFIG FOR app.livewd.ca
 # -------------------------------------------------------------------
 
@@ -9,7 +17,6 @@
   # -----------------------------------------------------------------
   # 1. REMOVE .PHP EXTENSION FROM URL
   # -----------------------------------------------------------------
-  # Serve /page as /page.php if it exists
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteCond %{DOCUMENT_ROOT}/$1.php -f
   RewriteRule ^([^/]+)/?$ $1.php [L]
